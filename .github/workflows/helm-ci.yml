@@ -1,0 +1,50 @@
+name: Helm Chart CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'Chart.yaml'
+      - 'values.yaml'
+      - 'templates/**'
+      - '.github/workflows/helm-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  lint-template-package:
+    name: Lint, Template, and Package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Helm version
+        run: helm version
+
+      - name: Build chart dependencies (if any)
+        run: helm dependency build .
+
+      - name: Lint chart
+        run: helm lint .
+
+      - name: Template render with default values
+        run: |
+          helm template test-release . -f values.yaml > /dev/null
+
+      - name: Package chart
+        run: |
+          mkdir -p dist
+          helm package . --destination dist
+
+      - name: Upload packaged chart artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: helm-chart-package
+          path: dist/*.tgz
+
+

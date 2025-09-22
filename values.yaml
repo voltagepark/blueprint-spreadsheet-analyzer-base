@@ -1,0 +1,89 @@
+# Global pod settings shared by both models
+pod:
+  runtimeClassName: nvidia
+  terminationGracePeriodSeconds: 120
+
+# GPT-OSS-120B (vLLM) config
+gptoss:
+  replicaCount: 3
+  image:
+    repository: vllm/vllm-openai
+    tag: gptoss
+  service:
+    port: 8000
+  model:
+    id: openai/gpt-oss-120b
+    servedName: openai/gpt-oss-120b
+    tensorParallelSize: 4
+    maxModelLen: 131072
+    maxNumBatchedTokens: 524288
+    downloadDir: /cache/hf
+  volumes:
+    modelCache:
+      sizeLimit: 400Gi
+    shm:
+      sizeLimit: 64Gi
+  resources:
+    requests:
+      cpu: "40"
+      memory: 192Gi
+      ephemeralStorage: 300Gi
+      gpu: "4"
+    limits:
+      cpu: "48"
+      memory: 256Gi
+      ephemeralStorage: 400Gi
+      gpu: "4"
+
+# Qwen2.5-VL (vLLM) config
+qwen25vl:
+  replicaCount: 1
+  image:
+    repository: vllm/vllm-openai
+    tag: latest
+  service:
+    port: 8000
+  model:
+    id: Qwen/Qwen2.5-VL-7B-Instruct
+    tensorParallelSize: 1
+    dtype: bfloat16
+    maxNumBatchedTokens: 16384
+    downloadDir: /cache/hf
+  volumes:
+    modelCache:
+      sizeLimit: 200Gi
+    shm:
+      sizeLimit: 64Gi
+  resources:
+    requests:
+      cpu: "20"
+      memory: 64Gi
+      ephemeralStorage: 100Gi
+      gpu: "1"
+    limits:
+      cpu: "24"
+      memory: 96Gi
+      ephemeralStorage: 150Gi
+      gpu: "1"
+
+minio:
+  replicas: 1
+  image:
+    repository: minio/minio
+    tag: RELEASE.2025-09-07T16-13-09Z
+  service:
+    ports:
+      api: 9000
+      console: 9001
+  rootUser: minioadmin
+  rootPassword: minioadminpassword
+  persistence:
+    size: 500Gi
+    # storageClassName: standard
+  resources:
+    requests:
+      cpu: "500m"
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi

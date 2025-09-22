@@ -1,0 +1,6 @@
+apiVersion: v2
+name: blueprint-spreadsheet-analyzer-base
+description: Helm chart to deploy the blueprint spreadsheet analyzer base
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
