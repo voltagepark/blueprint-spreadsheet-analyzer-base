@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gptoss
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+spec:
+  replicas: {{ .Values.gptoss.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "chart.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: gptoss
+  template:
+    metadata:
+      labels:
+        {{- include "chart.labels" . | nindent 8 }}
+        app.kubernetes.io/component: gptoss
+    spec:
+      runtimeClassName: {{ .Values.pod.runtimeClassName }}
+      restartPolicy: Always
+      terminationGracePeriodSeconds: {{ .Values.pod.terminationGracePeriodSeconds }}
+      volumes:
+        - name: model-cache
+          emptyDir:
+            sizeLimit: "{{ .Values.gptoss.volumes.modelCache.sizeLimit }}"
+        - name: tmpdir
+          emptyDir: {}
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: "{{ .Values.gptoss.volumes.shm.sizeLimit }}"
+      containers:
+        - name: {{ .Chart.Name }}
+          image: {{ .Values.gptoss.image.repository }}:{{ .Values.gptoss.image.tag }}
+          args:
+            - "--model"
+            - "{{ .Values.gptoss.model.id }}"
+            - "--served-model-name"
+            - "{{ .Values.gptoss.model.servedName }}"
+            - "--tensor-parallel-size"
+            - "{{ .Values.gptoss.model.tensorParallelSize }}"
+            - "--max-model-len"
+            - "{{ .Values.gptoss.model.maxModelLen }}"
+            - "--max-num-batched-tokens"
+            - "{{ .Values.gptoss.model.maxNumBatchedTokens }}"
+            - "--download-dir"
+            - "{{ .Values.gptoss.model.downloadDir }}"
+            - "--port"
+            - "{{ .Values.gptoss.service.port }}"
+          env:
+            - name: HF_HOME
+              value: "/cache/hf"
+            - name: TRANSFORMERS_CACHE
+              value: "/cache/hf/transformers"
+            - name: XDG_CACHE_HOME
+              value: "/cache/xdg"
+          ports:
+            - containerPort: {{ .Values.gptoss.service.port }}
+          volumeMounts:
+            - name: model-cache
+              mountPath: /cache
+            - name: tmpdir
+              mountPath: /tmp
+            - name: shm
+              mountPath: /dev/shm
+          resources:
+            requests:
+              cpu: "{{ .Values.gptoss.resources.requests.cpu }}"
+              memory: "{{ .Values.gptoss.resources.requests.memory }}"
+              ephemeral-storage: "{{ .Values.gptoss.resources.requests.ephemeralStorage }}"
+              nvidia.com/gpu: "{{ .Values.gptoss.resources.requests.gpu }}"
+            limits:
+              cpu: "{{ .Values.gptoss.resources.limits.cpu }}"
+              memory: "{{ .Values.gptoss.resources.limits.memory }}"
+              ephemeral-storage: "{{ .Values.gptoss.resources.limits.ephemeralStorage }}"
+              nvidia.com/gpu: "{{ .Values.gptoss.resources.limits.gpu }}"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+          startupProbe:
+            httpGet: { path: /v1/models, port: {{ .Values.gptoss.service.port }} }
+            periodSeconds: 5
+            failureThreshold: 120
+          readinessProbe:
+            httpGet: { path: /v1/models, port: {{ .Values.gptoss.service.port }} }
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /v1/models, port: {{ .Values.gptoss.service.port }} }
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gptoss
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "chart.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: gptoss
+  ports:
+    - port: {{ .Values.gptoss.service.port }}
+      targetPort: {{ .Values.gptoss.service.port }}
+      protocol: TCP

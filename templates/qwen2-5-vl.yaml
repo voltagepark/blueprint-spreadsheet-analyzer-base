@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qwen25vl
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+spec:
+  replicas: {{ .Values.qwen25vl.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "chart.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: qwen25vl
+  template:
+    metadata:
+      labels:
+        {{- include "chart.labels" . | nindent 8 }}
+        app.kubernetes.io/component: qwen25vl
+    spec:
+      runtimeClassName: {{ .Values.pod.runtimeClassName }}
+      restartPolicy: Always
+      terminationGracePeriodSeconds: {{ .Values.pod.terminationGracePeriodSeconds }}
+      volumes:
+        - name: model-cache
+          emptyDir:
+            sizeLimit: "{{ .Values.qwen25vl.volumes.modelCache.sizeLimit }}"
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: "{{ .Values.qwen25vl.volumes.shm.sizeLimit }}"
+      containers:
+        - name: {{ .Chart.Name }}-qwen25vl
+          image: {{ .Values.qwen25vl.image.repository }}:{{ .Values.qwen25vl.image.tag }}
+          args:
+            - "--model"
+            - "{{ .Values.qwen25vl.model.id }}"
+            - "--download-dir"
+            - "{{ .Values.qwen25vl.model.downloadDir }}"
+            - "--tensor-parallel-size"
+            - "{{ .Values.qwen25vl.model.tensorParallelSize }}"
+            - "--dtype"
+            - "{{ .Values.qwen25vl.model.dtype }}"
+            - "--max-num-batched-tokens"
+            - "{{ .Values.qwen25vl.model.maxNumBatchedTokens }}"
+            - "--port"
+            - "{{ .Values.qwen25vl.service.port }}"
+          ports:
+            - containerPort: {{ .Values.qwen25vl.service.port }}
+          volumeMounts:
+            - name: model-cache
+              mountPath: /cache
+            - name: shm
+              mountPath: /dev/shm
+          resources:
+            requests:
+              cpu: "{{ .Values.qwen25vl.resources.requests.cpu }}"
+              memory: "{{ .Values.qwen25vl.resources.requests.memory }}"
+              ephemeral-storage: "{{ .Values.qwen25vl.resources.requests.ephemeralStorage }}"
+              nvidia.com/gpu: "{{ .Values.qwen25vl.resources.requests.gpu }}"
+            limits:
+              cpu: "{{ .Values.qwen25vl.resources.limits.cpu }}"
+              memory: "{{ .Values.qwen25vl.resources.limits.memory }}"
+              ephemeral-storage: "{{ .Values.qwen25vl.resources.limits.ephemeralStorage }}"
+              nvidia.com/gpu: "{{ .Values.qwen25vl.resources.limits.gpu }}"
+          startupProbe:
+            httpGet: { path: /v1/models, port: {{ .Values.qwen25vl.service.port }} }
+            periodSeconds: 5
+            failureThreshold: 120
+          readinessProbe:
+            httpGet: { path: /v1/models, port: {{ .Values.qwen25vl.service.port }} }
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /v1/models, port: {{ .Values.qwen25vl.service.port }} }
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qwen25vl
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "chart.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: qwen25vl
+  ports:
+    - port: {{ .Values.qwen25vl.service.port }}
+      targetPort: {{ .Values.qwen25vl.service.port }}
+      protocol: TCP
